@@ -1,0 +1,52 @@
+{
+  "min_packer_version": "1.2.5",
+  "builders": [{
+    "type": "amazon-ebs",
+    "region": "eu-west-1",
+    "source_ami_filter": {
+      "filters": {
+       "name": "amzn2-ami-hvm-*-gp2"
+      },
+      "owners": [
+        "137112412989",
+        "591542846629",
+        "801119661308",
+        "102837901569",
+        "013907871322",
+        "206029621532",
+        "286198878708",
+        "443319210888"
+      ],
+      "most_recent": true
+    },
+    "run_tags": {
+      "Name": "concourse-ami-builder"
+    },
+    "instance_type": "t2.small",
+    "ena_support": true,
+    "ssh_username": "ec2-user",
+    "ssh_file_transfer_method": "sftp",
+    "ssh_pty": true,
+    "ami_name": "concourse-v4.0.0-{{timestamp}}"
+  }],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": [
+        "unset HISTFILE",
+        "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done",
+        "sudo yum -y update",
+        "echo 'vm.swappiness=0' | sudo tee /etc/sysctl.d/99-noswappiness.conf",
+        "curl -L https://github.com/concourse/concourse/releases/download/v4.0.0/concourse_linux_amd64 -o concourse",
+        "chmod +x concourse",
+        "sudo mv concourse /usr/bin/concourse",
+        "concourse -version"
+      ]
+    },
+    {
+      "type": "file",
+      "source": "{{template_dir}}/ca.crt.pem",
+      "destination": "/tmp/ca.crt.pem"
+    }
+  ]
+}
