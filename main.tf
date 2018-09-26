@@ -189,25 +189,25 @@ resource "aws_launch_configuration" "windows-worker-lc" {
 <powershell>
   Start-Sleep -s 10
   Get-NetFirewallProfile | Set-NetFirewallProfile -Enabled False
- 
+
   $concourseDirExists = Test-Path -Path "C:\Concourse"
- 
+
   if ($concourseDirExists -eq $false) { mkdir C:\concourse }
- 
+
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
- 
+
   $concourseExeExists = Test-Path -Path "C:\concourse\concourse_windows_amd64.exe" -PathType leaf
- 
+
   if ($concourseExeExists -eq $false) {
     Invoke-WebRequest 'https://github.com/concourse/concourse/releases/download/v3.14.1/concourse_windows_amd64.exe' -UseBasicParsing -OutFile C:\concourse\concourse_windows_amd64.exe
   }
- 
+
   $instance_id = (Invoke-WebRequest -Uri http://169.254.169.254/latest/meta-data/instance-id -UseBasicParsing).content
   $peer_ip = (Invoke-WebRequest -Uri http://169.254.169.254/latest/meta-data/local-ipv4 -UseBasicParsing).content
- 
+
   "${file("${var.tsa_public_key}")}" | Out-File -encoding ascii C:\concourse\tsa-public-key.pub -NoNewline
   "${file("${var.tsa_worker_private_key}")}" | Out-File -encoding ascii C:\concourse\tsa-worker-private-key -NoNewline
- 
+
   Start-Process -FilePath C:\concourse\concourse_windows_amd64.exe -RedirectStandardOutput "C:\concourse\stdout.txt" -RedirectStandardError "C:\concourse\stderr.txt" -WindowStyle Hidden -ArgumentList ("worker /name $instance_id /peer-ip $peer_ip /bind-ip $peer_ip /baggageclaim-bind-ip 0.0.0.0 /work-dir C:\concourse\containers /tsa-worker-private-key C:\concourse\tsa-worker-private-key /tsa-public-key C:\concourse\tsa-public-key.pub /tsa-host ${aws_elb.web-elb.dns_name}:${var.tsa_port}")
 </powershell>
 <persist>true</persist>
@@ -312,34 +312,20 @@ resource "aws_security_group" "concourse" {
   name_prefix = "${var.prefix}concourse"
   vpc_id = "${var.vpc_id}"
 
-  ingress {
-    from_port = 123
-    to_port = 123
-    protocol = "udp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port = 123
-    to_port = 123
-    protocol = "udp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   # SSH access from a specific CIDRS
-  ingress {
-    from_port = 22
-    to_port = 22
-    protocol = "tcp"
-    cidr_blocks = [ "${split(",", var.in_access_allowed_cidrs)}" ]
-  }
-
-  ingress {
-    from_port = 3389
-    to_port = 3389
-    protocol = "tcp"
-    cidr_blocks = [ "${split(",", var.in_access_allowed_cidrs)}" ]
-  }
+  # ingress {
+  #   from_port = 22
+  #   to_port = 22
+  #   protocol = "tcp"
+  #   cidr_blocks = [ "${split(",", var.in_access_allowed_cidrs)}" ]
+  # }
+  #
+  # ingress {
+  #   from_port = 3389
+  #   to_port = 3389
+  #   protocol = "tcp"
+  #   cidr_blocks = [ "${split(",", var.in_access_allowed_cidrs)}" ]
+  # }
 
   # outbound internet access
   egress {
