@@ -26,21 +26,26 @@ resource "aws_iam_instance_profile" "worker_iam_instance_profile" {
   name = "worker_iam_instance_profile"
   role = "${aws_iam_role.worker_iam_role.name}"
 }
+#
+# resource "aws_iam_policy_attachment" "iam-ecr-policy-attach" {
+#   name = "ecr-policy-attachment"
+#   roles = ["${aws_iam_role.worker_iam_role.name}"]
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+# }
 
-resource "aws_iam_policy_attachment" "iam-ecr-policy-attach" {
-  name = "ecr-policy-attachment"
-  roles = ["${aws_iam_role.worker_iam_role.name}"]
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
-}
+# resource "aws_iam_policy_attachment" "iam-s3-policy-attach" {
+#   name = "ecr-policy-attachment"
+#   roles = ["${aws_iam_role.worker_iam_role.name}"]
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+# }
 
-resource "aws_iam_policy_attachment" "iam-s3-policy-attach" {
-  name = "ecr-policy-attachment"
-  roles = ["${aws_iam_role.worker_iam_role.name}"]
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+resource "aws_iam_role_policy_attachment" "iam-s3-policy-attach" {
+    role       = "${aws_iam_role.worker_iam_role.name}"
+    policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 }
 
 resource "aws_elb" "web-elb" {
-  name = "${var.prefix}concourse"
+  name = "${var.prefix}-concourse"
   security_groups = ["${aws_security_group.external_lb.id}"]
   subnets = ["${split(",", var.pub_subnet_id)}"]
   cross_zone_load_balancing = "true"
@@ -73,7 +78,7 @@ resource "aws_autoscaling_group" "web-asg" {
   # See "Phasing in" an Autoscaling Group? https://groups.google.com/forum/#!msg/terraform-tool/7Gdhv1OAc80/iNQ93riiLwAJ
   # * Recreation of the launch configuration triggers recreation of this ASG and its EC2 instances
   # * Modification to the lc (change to referring AMI) triggers recreation of this ASG
-  name = "${var.prefix}${aws_launch_configuration.web-lc.name}-${var.ami}"
+  name = "${var.prefix}-${aws_launch_configuration.web-lc.name}-${var.ami}"
   availability_zones = ["${split(",", var.availability_zones)}"]
   max_size = "${var.asg_max}"
   min_size = "${var.asg_min}"
@@ -84,7 +89,7 @@ resource "aws_autoscaling_group" "web-asg" {
 
   tag {
     key = "Name"
-    value = "${var.prefix}concourse-web"
+    value = "${var.prefix}-concourse-web"
     propagate_at_launch = "true"
   }
 
@@ -94,7 +99,7 @@ resource "aws_autoscaling_group" "web-asg" {
 }
 
 resource "aws_autoscaling_group" "worker-asg" {
-  name = "${var.prefix}${aws_launch_configuration.worker-lc.name}-${var.ami}"
+  name = "${var.prefix}-${aws_launch_configuration.worker-lc.name}-${var.ami}"
   availability_zones = ["${split(",", var.availability_zones)}"]
   max_size = "${var.asg_max}"
   min_size = "${var.asg_min}"
@@ -104,13 +109,13 @@ resource "aws_autoscaling_group" "worker-asg" {
 
   tag {
     key = "Name"
-    value = "${var.prefix}concourse-worker"
+    value = "${var.prefix}-concourse-worker"
     propagate_at_launch = "true"
   }
 }
 
 resource "aws_autoscaling_group" "windows-worker-asg" {
-  name = "${var.prefix}${aws_launch_configuration.windows-worker-lc.name}-${data.aws_ami.amazon_windows_2016.image_id}"
+  name = "${var.prefix}-${aws_launch_configuration.windows-worker-lc.name}-${data.aws_ami.amazon_windows_2016.image_id}"
   availability_zones = ["${split(",", var.availability_zones)}"]
   max_size = "${var.windows_asg_max}"
   min_size = "${var.windows_asg_min}"
@@ -120,13 +125,13 @@ resource "aws_autoscaling_group" "windows-worker-asg" {
 
   tag {
     key = "Name"
-    value = "${var.prefix}concourse-windows-worker"
+    value = "${var.prefix}-concourse-windows-worker"
     propagate_at_launch = "true"
   }
 }
 
 resource "aws_launch_configuration" "web-lc" {
-  name_prefix = "${var.prefix}concourse-web-"
+  name_prefix = "${var.prefix}-concourse-web-"
   image_id = "${var.ami}"
   instance_type = "${var.web_instance_type}"
   spot_price = "${substr(var.web_instance_type, 0, 2) == "t2" ? "" : var.web_spot_price}"
@@ -145,7 +150,7 @@ resource "aws_launch_configuration" "web-lc" {
 }
 
 resource "aws_launch_configuration" "worker-lc" {
-  name_prefix = "${var.prefix}concourse-worker-"
+  name_prefix = "${var.prefix}-concourse-worker-"
   image_id = "${var.ami}"
   instance_type = "${var.worker_instance_type}"
   spot_price = "${substr(var.worker_instance_type, 0, 2) == "t2" ? "" : var.worker_spot_price}"
@@ -179,7 +184,7 @@ data "aws_ami" "amazon_windows_2016" {
 }
 
 resource "aws_launch_configuration" "windows-worker-lc" {
-  name_prefix = "${var.prefix}concourse-windows-worker-"
+  name_prefix = "${var.prefix}-concourse-windows-worker-"
   image_id = "ami-9d5167e4"
   instance_type = "${var.windows_worker_instance_type}"
   spot_price = "${substr(var.windows_worker_spot_price, 0, 2) == "t2" ? "" : var.windows_worker_spot_price}"
@@ -309,7 +314,7 @@ data "template_cloudinit_config" "worker" {
 }
 
 resource "aws_security_group" "concourse" {
-  name_prefix = "${var.prefix}concourse"
+  name_prefix = "${var.prefix}-concourse"
   vpc_id = "${var.vpc_id}"
 
   # SSH access from a specific CIDRS
@@ -341,7 +346,7 @@ resource "aws_security_group" "concourse" {
 }
 
 resource "aws_security_group" "atc" {
-  name_prefix = "${var.prefix}concourse-atc"
+  name_prefix = "${var.prefix}-concourse-atc"
   vpc_id = "${var.vpc_id}"
 
   lifecycle {
@@ -370,7 +375,7 @@ resource "aws_security_group_rule" "allow_atc_to_worker_access" {
 }
 
 resource "aws_security_group" "tsa" {
-  name_prefix = "${var.prefix}concourse-tsa"
+  name_prefix = "${var.prefix}-concourse-tsa"
   vpc_id = "${var.vpc_id}"
 
   # outbound internet access
@@ -407,7 +412,7 @@ resource "aws_security_group_rule" "allow_external_lb_to_tsa_access" {
 }
 
 resource "aws_security_group" "worker" {
-  name_prefix = "${var.prefix}concourse-worker"
+  name_prefix = "${var.prefix}-concourse-worker"
   vpc_id = "${var.vpc_id}"
 
   # outbound internet access
@@ -424,7 +429,7 @@ resource "aws_security_group" "worker" {
 }
 
 resource "aws_security_group" "external_lb" {
-  name_prefix = "${var.prefix}concourse-lb"
+  name_prefix = "${var.prefix}-concourse-lb"
 
   vpc_id = "${var.vpc_id}"
 
@@ -436,12 +441,12 @@ resource "aws_security_group" "external_lb" {
     cidr_blocks = [ "${split(",", var.in_access_allowed_cidrs)}" ]
   }
 
-  ingress {
-    from_port = "${var.tsa_port}"
-    to_port = "${var.tsa_port}"
-    protocol = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # ingress {
+  #   from_port = "${var.tsa_port}"
+  #   to_port = "${var.tsa_port}"
+  #   protocol = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
 
   egress {
     from_port = 0
@@ -456,7 +461,7 @@ resource "aws_security_group" "external_lb" {
 }
 
 resource "aws_security_group" "concourse_db" {
-  name_prefix = "${var.prefix}concourse-db"
+  name_prefix = "${var.prefix}-concourse-db"
   vpc_id = "${var.vpc_id}"
 
   # outbound internet access
@@ -484,7 +489,7 @@ resource "aws_security_group_rule" "allow_db_access_from_atc" {
 
 resource "aws_db_instance" "concourse" {
   depends_on = ["aws_security_group.concourse_db"]
-  identifier = "${var.prefix}concourse-master"
+  identifier = "${var.prefix}-concourse-master"
   allocated_storage = "50"
   engine = "postgres"
   engine_version = "9.6.6"
@@ -504,6 +509,6 @@ resource "aws_db_instance" "concourse" {
 }
 
 resource "aws_db_subnet_group" "concourse" {
-  name = "${var.prefix}concourse-db"
+  name = "${var.prefix}-concourse-db"
   subnet_ids = ["${split(",", var.db_subnet_ids)}"]
 }
