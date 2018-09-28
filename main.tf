@@ -185,7 +185,8 @@ data "aws_ami" "amazon_windows_2016" {
 
 resource "aws_launch_configuration" "windows-worker-lc" {
   name_prefix = "${var.prefix}-concourse-windows-worker-"
-  image_id = "ami-9d5167e4"
+  # image_id = "ami-9d5167e4"
+  image_id = "ami-049bf5e5ea4af0cfe"
   instance_type = "${var.windows_worker_instance_type}"
   spot_price = "${substr(var.windows_worker_spot_price, 0, 2) == "t2" ? "" : var.windows_worker_spot_price}"
   security_groups = ["${aws_security_group.concourse.id}", "${aws_security_group.worker.id}"]
@@ -397,7 +398,7 @@ resource "aws_security_group_rule" "allow_worker_to_tsa_access" {
   to_port = 2222
   protocol = "tcp"
 
-  security_group_id = "${aws_security_group.tsa.id}"
+  security_group_id = "${aws_security_group.external_lb.id}"
   source_security_group_id = "${aws_security_group.worker.id}"
 }
 
@@ -489,7 +490,7 @@ resource "aws_security_group_rule" "allow_db_access_from_atc" {
 
 resource "aws_db_instance" "concourse" {
   depends_on = ["aws_security_group.concourse_db"]
-  identifier = "${var.prefix}-concourse-master"
+  identifier = "concourse-master"
   allocated_storage = "50"
   engine = "postgres"
   engine_version = "9.6.6"
@@ -506,6 +507,10 @@ resource "aws_db_instance" "concourse" {
   maintenance_window = "sun:04:30-sun:05:30"
   apply_immediately = true
   final_snapshot_identifier = "concourse"
+
+  lifecycle {
+    ignore_changes = ["password"]
+  }
 }
 
 resource "aws_db_subnet_group" "concourse" {
