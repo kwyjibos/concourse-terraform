@@ -108,10 +108,6 @@ variable "elb_listener_instance_port" {
   default = "8080"
 }
 
-variable "in_access_allowed_cidrs" {
-  description = ""
-}
-
 variable "priv_subnet_id" {
   description = ""
 }
@@ -128,37 +124,9 @@ variable "vpc_id" {
   description = ""
 }
 
-variable "db_username" {
-  description = ""
-}
-
-variable "db_password" {
-  description = ""
-}
-
 variable "db_instance_class" {
   description = "AWS RDS instance type"
   default = "db.t2.small"
-}
-
-variable "tsa_host_key" {
-  description = ""
-}
-
-variable "session_signing_key" {
-  description = ""
-}
-
-variable "tsa_authorized_keys" {
-  description = ""
-}
-
-variable "tsa_public_key" {
-  description = ""
-}
-
-variable "tsa_worker_private_key" {
-  description = ""
 }
 
 variable "tsa_port" {
@@ -175,14 +143,6 @@ variable "basic_auth_username" {
 }
 
 variable "basic_auth_password" {
-  default = ""
-}
-
-variable "github_auth_client_id" {
-  default = ""
-}
-
-variable "github_auth_client_secret" {
   default = ""
 }
 
@@ -207,18 +167,6 @@ variable "use_custom_external_domain_name" {
   default = 0
 }
 
-variable "ssl_certificate_arn" {
-  default = ""
-}
-
-variable "vault_url" {
-  default = ""
-}
-
 variable "vault_ca_cert" {
-  default = ""
-}
-
-variable "vault_client_token" {
   default = ""
 }

@@ -66,7 +66,7 @@ resource "aws_elb" "web-elb" {
     instance_protocol = "tcp"
     lb_port = "${var.elb_listener_lb_port}"
     lb_protocol = "${var.elb_listener_lb_port == 80 ? "tcp" : "ssl"}"
-    ssl_certificate_id = "${var.ssl_certificate_arn}"
+    ssl_certificate_id = "${data.aws_ssm_parameter.ssl_certificate_arn.value}"
   }
 
   listener {
@@ -222,8 +222,8 @@ resource "aws_launch_configuration" "windows-worker-lc" {
   $instance_id = (Invoke-WebRequest -Uri http://169.254.169.254/latest/meta-data/instance-id -UseBasicParsing).content
   $peer_ip = (Invoke-WebRequest -Uri http://169.254.169.254/latest/meta-data/local-ipv4 -UseBasicParsing).content
 
-  "${file("${var.tsa_public_key}")}" | Out-File -encoding ascii C:\concourse\tsa-public-key.pub -NoNewline
-  "${file("${var.tsa_worker_private_key}")}" | Out-File -encoding ascii C:\concourse\tsa-worker-private-key -NoNewline
+  "${data.aws_ssm_parameter.tsa_public_key.value}" | Out-File -encoding ascii C:\concourse\tsa-public-key.pub -NoNewline
+  "${data.aws_ssm_parameter.tsa_worker_private_key.value}" | Out-File -encoding ascii C:\concourse\tsa-worker-private-key -NoNewline
 
   Start-Process -FilePath C:\concourse\concourse_windows_amd64.exe -RedirectStandardOutput "C:\concourse\stdout.txt" -RedirectStandardError "C:\concourse\stderr.txt" -WindowStyle Hidden -ArgumentList ("worker /name $instance_id /peer-ip $peer_ip /bind-ip $peer_ip /baggageclaim-bind-ip 0.0.0.0 /work-dir C:\concourse\containers /tsa-worker-private-key C:\concourse\tsa-worker-private-key /tsa-public-key C:\concourse\tsa-public-key.pub /tsa-host ${aws_elb.web-elb.dns_name}:${var.tsa_port}")
 </powershell>
@@ -246,14 +246,57 @@ EOF
   ebs_optimized = "true"
 }
 
-resource "aws_ssm_parameter" "db_password" {
-  name  = "concourse_db_password"
-  type  = "SecureString"
-  value = "${var.db_password}"
+# Retrieve sensitive values from SSM
+data "aws_ssm_parameter" "db_username" {
+  name  = "db_username"
+}
 
-  lifecycle {
-    ignore_changes = ["value"]
-  }
+data "aws_ssm_parameter" "db_password" {
+  name  = "db_password"
+}
+
+data "aws_ssm_parameter" "github_auth_client_id" {
+  name  = "github_auth_client_id"
+}
+
+data "aws_ssm_parameter" "github_auth_client_secret" {
+  name  = "github_auth_client_secret"
+}
+
+data "aws_ssm_parameter" "in_access_allowed_cidrs" {
+  name  = "in_access_allowed_cidrs"
+}
+
+data "aws_ssm_parameter" "session_signing_key" {
+  name  = "session_signing_key"
+}
+
+data "aws_ssm_parameter" "ssl_certificate_arn" {
+  name  = "ssl_certificate_arn"
+}
+
+data "aws_ssm_parameter" "tsa_authorized_keys" {
+  name  = "tsa_authorized_keys"
+}
+
+data "aws_ssm_parameter" "tsa_host_key" {
+  name  = "tsa_host_key"
+}
+
+data "aws_ssm_parameter" "tsa_public_key" {
+  name  = "tsa_public_key"
+}
+
+data "aws_ssm_parameter" "tsa_worker_private_key" {
+  name  = "tsa_worker_private_key"
+}
+
+data "aws_ssm_parameter" "vault_url" {
+  name  = "vault_url"
+}
+
+data "aws_ssm_parameter" "vault_client_token" {
+  name  = "vault_client_token"
 }
 
 data "template_file" "install_concourse" {
@@ -264,21 +307,21 @@ data "template_file" "start_concourse_web" {
   template = "${file("${path.module}/01_start_concourse_web.sh.tpl")}"
 
   vars {
-    session_signing_key = "${file("${var.session_signing_key}")}"
-    tsa_host_key = "${file("${var.tsa_host_key}")}"
-    tsa_authorized_keys = "${file("${var.tsa_authorized_keys}")}"
-    postgres_data_source = "postgres://${var.db_username}:${aws_ssm_parameter.db_password.value}@${aws_db_instance.concourse.endpoint}/concourse"
+    session_signing_key = "${data.aws_ssm_parameter.session_signing_key.value}"
+    tsa_host_key = "${data.aws_ssm_parameter.tsa_host_key.value}"
+    tsa_authorized_keys = "${data.aws_ssm_parameter.tsa_authorized_keys.value}"
+    postgres_data_source = "postgres://${data.aws_ssm_parameter.db_username.value}:${data.aws_ssm_parameter.db_password.value}@${aws_db_instance.concourse.endpoint}/concourse"
     external_url = "${var.elb_listener_lb_protocol}://${element(split(",","${aws_elb.web-elb.dns_name},${var.custom_external_domain_name}"), var.use_custom_external_domain_name)}${element(split(",",",:${var.elb_listener_lb_port}"), var.use_custom_elb_port)}"
     basic_auth_username = "${var.basic_auth_username}"
     basic_auth_password = "${var.basic_auth_password}"
-    github_auth_client_id = "${var.github_auth_client_id}"
-    github_auth_client_secret = "${var.github_auth_client_secret}"
+    github_auth_client_id = "${data.aws_ssm_parameter.github_auth_client_id.value}"
+    github_auth_client_secret = "${data.aws_ssm_parameter.github_auth_client_secret.value}"
     github_auth_organizations = "${var.github_auth_organizations}"
     github_auth_teams = "${var.github_auth_teams}"
     github_auth_users = "${var.github_auth_users}"
-    vault_url = "${var.vault_url}"
+    vault_url = "${data.aws_ssm_parameter.vault_url.value}"
     vault_ca_cert = "${var.vault_ca_cert}"
-    vault_client_token = "${var.vault_client_token}"
+    vault_client_token = "${data.aws_ssm_parameter.vault_client_token.value}"
   }
 }
 
@@ -288,8 +331,8 @@ data "template_file" "start_concourse_worker" {
   vars {
     tsa_host = "${aws_elb.web-elb.dns_name}"
     tsa_port = "${var.tsa_port}"
-    tsa_public_key = "${file("${var.tsa_public_key}")}"
-    tsa_worker_private_key = "${file("${var.tsa_worker_private_key}")}"
+    tsa_public_key = "${data.aws_ssm_parameter.tsa_public_key.value}"
+    tsa_worker_private_key = "${data.aws_ssm_parameter.tsa_worker_private_key.value}"
   }
 }
 
@@ -334,14 +377,14 @@ resource "aws_security_group" "concourse" {
   #   from_port = 22
   #   to_port = 22
   #   protocol = "tcp"
-  #   cidr_blocks = [ "${split(",", var.in_access_allowed_cidrs)}" ]
+  #   cidr_blocks = [ "${split(",", data.aws_ssm_parameter.in_access_allowed_cidrs.value)}" ]
   # }
   #
   # ingress {
   #   from_port = 3389
   #   to_port = 3389
   #   protocol = "tcp"
-  #   cidr_blocks = [ "${split(",", var.in_access_allowed_cidrs)}" ]
+  #   cidr_blocks = [ "${split(",", data.aws_ssm_parameter.in_access_allowed_cidrs.value)}" ]
   # }
 
   # outbound internet access
@@ -450,7 +493,7 @@ resource "aws_security_group" "external_lb" {
     from_port = "${var.elb_listener_lb_port}"
     to_port = "${var.elb_listener_lb_port}"
     protocol = "tcp"
-    cidr_blocks = [ "${split(",", var.in_access_allowed_cidrs)}" ]
+    cidr_blocks = [ "${split(",", data.aws_ssm_parameter.in_access_allowed_cidrs.value)}" ]
   }
 
   # ingress {
@@ -508,8 +551,8 @@ resource "aws_db_instance" "concourse" {
   instance_class = "${var.db_instance_class}"
   storage_type = "gp2"
   name = "concourse"
-  username = "${var.db_username}"
-  password = "${aws_ssm_parameter.db_password.value}"
+  username = "${data.aws_ssm_parameter.db_username.value}"
+  password = "${data.aws_ssm_parameter.db_password.value}"
   vpc_security_group_ids = ["${aws_security_group.concourse_db.id}"]
   db_subnet_group_name = "${aws_db_subnet_group.concourse.id}"
   storage_encrypted = true
